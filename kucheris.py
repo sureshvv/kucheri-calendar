@@ -17,7 +17,6 @@ class KuchIterator:
         return self
 
     def next(self):
-        #import pdb; pdb.set_trace()
         try:
             c = self.cur_row.children
         except AttributeError:
@@ -31,8 +30,28 @@ class KuchIterator:
             self.year = int(dt1[3])
         start_time = c.next().string.split()
         c.next()
-        who = c.next().get_text().replace(')', '), ').rstrip(', ')
-        loc = c.next().get_text()
+        #import pdb; pdb.set_trace()
+        who = ""
+        for w1 in c.next().children:
+            if getattr(w1, 'name', None):
+                # can be an <a>, <br>, or <i>
+                if w1.name == 'a':
+                    who += w1.string
+                elif w1.name == 'br' and who:
+                    who += ", "
+            else:
+                who += w1.string
+        #who = c.next().get_text().replace(')', '), ').rstrip(', ')
+        loc = ""
+        for w1 in c.next().children:
+            if getattr(w1, 'name', None):
+                if w1.name == 'a' and w1.string:
+                    loc += w1.string
+                elif w1.name == 'br' and loc:
+                    loc += ", "
+            else:
+                loc += w1.string
+        #loc = c.next().get_text()
         self.cur_row = self.cur_row.next_sibling
         dict1 = {}
         dict1['hour'] = int(start_time[0].split(':')[0])
@@ -66,25 +85,3 @@ if __name__ == "__main__":
     r1 = KuchIterator()
     for x in r1:
         print x
-
-"""
-Pdb) p list(self.cur_row.children)[0]
-<td><div class="unstarred" id="8755" onclick="toggleStar(this);"></div></td>
-(Pdb) p list(self.cur_row.children)[1]
-u' '
-(Pdb) p list(self.cur_row.children)[2]
-<td>Wednesday 14th Nov 2012</td>
-(Pdb) p list(self.cur_row.children)[3]
-<td>7:00 PM</td>
-(Pdb) p list(self.cur_row.children)[4]
-u'\n'
-(Pdb) p list(self.cur_row.children)[5]
-<td><a href="artist.php?id=1390">R. Arjun Sambasivan</a> (Keyboard)<br/><a href="artist.php?id=1391">R. Narayanan</a> (Keyboard)<br/><a href="artist.php?id=1823">Nagerkoil Anand</a> (Violin)<br/><a href="artist.php?id=1129">S. Sathyanarayanan</a> (Mrdangam)<br/><a href="artist.php?id=51">S. Hariharasubramaniam</a> (Ghatam)<br/></td>
-(Pdb) p list(self.cur_row.children)[6]
-<td><a href="organization.php?id=339">Tambaram Asthika Sabha</a><br/><a href="venues.php?vid=52">Sitadevi Garodia Hindu Senior Secondary School (Chennai)</a></td>
-(Pdb) p list(self.cur_row.children)[7
-*** SyntaxError: SyntaxError('unexpected EOF while parsing', ('<string>', 1, 29, 'list(self.cur_row.children)[7'))
-(Pdb) p list(self.cur_row.children)[7]
-<td style="text-align:center;vertical-align:middle;"><a href="event.php?id=8755"><img src="images/icons/arrow-right.png"/></a></td>
-"""
-
