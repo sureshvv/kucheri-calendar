@@ -34,7 +34,32 @@ class KuchIterator:
         who = c.next().get_text().replace(')', '), ').rstrip(', ')
         loc = c.next().get_text()
         self.cur_row = self.cur_row.next_sibling
-        return self.year, self.month, self.day, start_time, who, loc
+        dict1 = {}
+        dict1['hour'] = int(start_time[0].split(':')[0])
+        assert dict1['hour'] <= 12
+        try:
+            dict1['min'] = int(start_time[0].split(':')[1])
+        except (IndexError, ValueError):
+            dict1['min'] = 0
+        assert dict1['min'] < 60
+        start_time[1] = start_time[1].upper()
+        assert start_time[1] in ['AM', 'PM']
+        if start_time[1] == 'PM':
+                if dict1['hour'] < 12:
+                    dict1['hour'] += 12
+        #if dict1['min'] >= 30:
+        #    dict1['hour'] -= 5
+        #    dict1['min'] -= 30
+        #else:
+        #    dict1['hour'] -= 6
+        #    dict1['min'] += 30
+        dict1['what'] = who.encode('utf-8')
+        dict1['where'] = loc.encode('utf-8')
+        dict1['year'] = self.year
+        dict1['month'] = self.month
+        dict1['day'] = self.day
+        dict1['content'] = 'kutcheris %s' % datetime.datetime.now()
+        return dict1
 
 
 if __name__ == "__main__":

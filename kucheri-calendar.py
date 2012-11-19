@@ -26,109 +26,10 @@ import gdata.calendar
 import gdata.calendar.service
 import Levenshtein
 
-PAGE_URL = 'http://ramsabode.wordpress.com/concerts-in-chennai'
+from kucheris import KuchIterator
 
 CALENDAR_NAME = 'default'
 #CALENDAR_NAME = 'admin@rasikas.org'
-
-months = calendar.month_name[1:]
-
-class RamIterator:
-    def __init__(self):
-        fp = urllib2.urlopen(PAGE_URL)
-        self.skip_data(fp)
-        self.myiter = iter(fp)
-
-    def __iter__(self):
-        return self
-
-    def next(self):
-        while True:
-            line = self.myiter.next()
-            line = line.strip()
-            line = line.replace('\xc2\xa0', '')
-	    if line.find('text-decoration:underline') != -1:
-                line = self.remove_tags(line)
-                line = line.strip()
-                if not line:
-                    # month being underlined
-                    continue
-                line = line.split()
-                if line[1] not in months:
-                    if line[0].capitalize() in months:
-                        continue
-                    raise StopIteration
-                self.year = int(line[2])
-                self.day = line[0]
-                assert(self.day.endswith('st') or self.day.endswith('nd') or \
-                       self.day.endswith('rd') or self.day.endswith('th'))
-                self.day = int(self.day[:-2])
-                self.month = months.index(line[1]) + 1
-            else:
-                if line.find('@') != -1:
-                    line = line.split('@')
-                    loc = line[1].strip()
-                    line0 = self.remove_tags(line[0])
-                    line0 = line0.replace('&#8211;', '-')
-                    line0 = line0.replace('\xe2\x80\x93', '-')
-                    line0 = line0.replace('\xe2\x80\x99', "'")
-                    line0 = line0.split('-', 1)
-                    data = line0[0].split()
-                    if len(data) == 4:
-                        if data[1] != 'to':
-                            continue
-                        data = [data[0], data[3]]
-                    if len(data) != 2:
-                        continue
-                    dict1 = {}
-                    dict1['hour'] = int(data[0].split(':')[0])
-                    assert dict1['hour'] <= 12
-                    try:
-                        dict1['min'] = int(data[0].split(':')[1])
-                    except (IndexError, ValueError):
-                        dict1['min'] = 0
-                    assert dict1['min'] < 60
-                    data[1] = data[1].upper()
-                    assert data[1] in ['AM', 'PM']
-                    if data[1] == 'PM':
-                        if dict1['hour'] < 12:
-                            dict1['hour'] += 12
-                    #if dict1['min'] >= 30:
-                    #    dict1['hour'] -= 5
-                    #    dict1['min'] -= 30
-                    #else:
-                    #    dict1['hour'] -= 6
-                    #    dict1['min'] += 30
-                    dict1['what'] = line0[1].strip()
-                    dict1['where'] = line[-1].strip()
-                    dict1['year'] = self.year
-                    dict1['month'] = self.month
-                    dict1['day'] = self.day
-                    dict1['content'] = 'ramsabode %s' % datetime.datetime.now()
-                    return dict1
-
-
-    def skip_data(self, fp):
-        for line in fp:
-            line = line.strip()
-            line = self.remove_tags(line)
-            line = line.split()
-            if len(line) == 2 and line[0].capitalize() in months:
-                return True
-        return False
-
-    def remove_tags(self, line):
-        while 1:
-            pos = line.find('<')
-            if pos == -1:
-                break
-            pos1 = line.find('>', pos)
-            if pos1 == -1:
-                break
-            line = line[:pos] + line[pos1+1:]
-        return line
- 
-
 
 def google_login(email, password):
     cal_client = gdata.calendar.service.CalendarService()
@@ -227,7 +128,7 @@ def delete_duplicate_events(start_date, n_days):
 def process_data():
     today = datetime.date.today()
     ex1 = google_login(username, userpass)
-    r1 = RamIterator()
+    r1 = KuchIterator()
     for x in r1:
         if x['year'] < today.year:
             print 'passing over ', x['year']
@@ -241,7 +142,6 @@ def process_data():
         if chk_event(ex1, x):
             #print 'passing over ', x['what'], ' on ', '%s-%02d-%02d' % (x['year'], x['month'], x['day'])
             continue
-        x['content'] = 'ramsabode %s' % datetime.datetime.now()
         add_event(ex1, x)
         print 'adding ', x['what'], ' on ', '%s-%02d-%02d' % (x['year'], x['month'], x['day'])
 
