@@ -27,6 +27,7 @@ import gdata.calendar.service
 import Levenshtein
 
 from kucheris import KuchIterator
+from ramsabode import RamIterator
 
 CALENDAR_NAME = 'default'
 #CALENDAR_NAME = 'admin@rasikas.org'
@@ -42,6 +43,11 @@ def google_login(email, password):
 last_info = {'date': None, 'feed': None, 'len': 0 }
 
 def same_string(str1, str2):
+    if not str1 or not str2:
+        return True
+    str1 = str1.encode('utf-8') if type(str1) == type(u'a') else str1
+    str2 = str2.encode('utf-8') if type(str2) == type(u'a') else str2
+    print '++++', str1, str2
     ratio = Levenshtein.ratio(str1, str2)
     return ratio > 0.9
 
@@ -63,7 +69,7 @@ def chk_event(cal_client, event):
         assert len(feed.entry) == last_info['len']
     matches = []
     for an_event in feed.entry:
-      if same_string(an_event.title.text, event['what']):
+      if an_event.title.text and same_string(an_event.title.text, event['what']):
           for a_when in an_event.when:
               start = a_when.start_time.split('T')[1].split(':')
               start_hour = int(start[0])
@@ -129,6 +135,7 @@ def process_data():
     today = datetime.date.today()
     ex1 = google_login(username, userpass)
     r1 = KuchIterator()
+    #r1 = RamIterator()
     for x in r1:
         if x['year'] < today.year:
             print 'passing over ', x['year']
@@ -138,6 +145,9 @@ def process_data():
             continue
         if x['year'] == today.year and x['month'] == today.month and x['day'] < today.day:
             print 'passing over %s-%02d-%02d' % (x['year'], x['month'], x['day'])
+            continue
+        if not x['what'].strip():
+            print 'passing over -%s-' % (x['what'], )
             continue
         if chk_event(ex1, x):
             #print 'passing over ', x['what'], ' on ', '%s-%02d-%02d' % (x['year'], x['month'], x['day'])

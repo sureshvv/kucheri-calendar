@@ -1,5 +1,6 @@
 import urllib2
 import calendar
+import datetime
 from bs4 import BeautifulSoup
 
 PAGE_URL = 'http://kutcheris.com/schedule.php'
@@ -10,7 +11,7 @@ class KuchIterator:
         fp = urllib2.urlopen(PAGE_URL)
         body = fp.read()
         soup = BeautifulSoup(body)
-        self.schedule = soup.find_all('table')[1]
+        self.schedule = soup.find_all('table')[0]
         self.cur_row = self.schedule.tbody.tr
 
     def __iter__(self):
