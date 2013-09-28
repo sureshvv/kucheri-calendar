@@ -17,6 +17,19 @@ class KuchIterator:
     def __iter__(self):
         return self
 
+    def get_a_children(self, parent):
+        out = ""
+        for c1 in parent.children:
+            if getattr(c1, 'name', None):
+                if c1.name == 'a':
+                    out += c1.string
+                elif c1.name in ['i', 'br']:
+                    out += ", "
+                    out += self.get_a_children(c1)
+            else:
+                out += c1.string
+        return out
+
     def next(self):
         try:
             c = self.cur_row.children
@@ -32,26 +45,9 @@ class KuchIterator:
         start_time = c.next().string.split()
         c.next()
         #import pdb; pdb.set_trace()
-        who = ""
-        for w1 in c.next().children:
-            if getattr(w1, 'name', None):
-                # can be an <a>, <br>, or <i>
-                if w1.name == 'a':
-                    who += w1.string
-                elif w1.name == 'br' and who:
-                    who += ", "
-            else:
-                who += w1.string
+        who = self.get_a_children(c.next())
         #who = c.next().get_text().replace(')', '), ').rstrip(', ')
-        loc = ""
-        for w1 in c.next().children:
-            if getattr(w1, 'name', None):
-                if w1.name == 'a' and w1.string:
-                    loc += w1.string
-                elif w1.name == 'br' and loc:
-                    loc += ", "
-            else:
-                loc += w1.string
+        loc = self.get_a_children(c.next())
         #loc = c.next().get_text()
         self.cur_row = self.cur_row.next_sibling
         dict1 = {}

@@ -16,13 +16,14 @@
 
 import sys
 import datetime
-import calendar
+import calendar, time
 import urllib2
 import atom
 from subprocess import Popen, PIPE
 from calendarExample import CalendarExample 
 from google_pw import username, userpass
 import gdata.calendar
+import gdata.service
 import gdata.calendar.service
 import Levenshtein
 
@@ -89,8 +90,15 @@ def add_event(cal_client, event):
     st2 = "%d-%02d-%02dT%02d:%02d:00.000+05:30" % (event['year'], event['month'],
         event['day'], event['hour']+2, event['min'])
     ev1.when.append(gdata.calendar.When(start_time=st1, end_time=st2))
-    
-    new_event = cal_client.InsertEvent(ev1, '/calendar/feeds/' + CALENDAR_NAME + '/private/full')
+    for ntries in range(5):
+        try:
+            new_event = cal_client.InsertEvent(ev1, '/calendar/feeds/' + CALENDAR_NAME + '/private/full')
+        except gdata.service.RequestError as inst:
+            print '++++', 'Retrying...', ntries, inst[0]['status']
+            time.sleep(5)
+            new_event = None
+        else:
+            break
     return new_event
 
 def delete_duplicate_events(start_date, n_days):
@@ -122,10 +130,14 @@ def delete_duplicate_events(start_date, n_days):
         #import pdb; pdb.set_trace()
         last_event = None
         for ev in events:
-            if last_event and same_string(last_event.title.text, ev.title.text) and \
-               last_event.when[0].start_time == ev.when[0].start_time:
-	        print '... deleting ', ev.title.text, ' at ', ev.when[0].start_time
-                ex1.DeleteEvent(ev.GetEditLink().href)
+            if last_event and last_event.when[0].start_time == ev.when[0].start_time:
+                if last_event.title.text in ev.title.text:
+                    print '... deleting ', last_event.title.text, ' at ', last_event.when[0].start_time
+                    ex1.DeleteEvent(last_event.GetEditLink().href)
+                    last_event = None
+                elif ev.title.text in last_event.title.text or same_string(last_event.title.text, ev.title.text):
+                    print '... deleting ', ev.title.text, ' at ', ev.when[0].start_time
+                    ex1.DeleteEvent(ev.GetEditLink().href)
             else:
                 last_event = ev
         last_info = {'date': None, 'feed': None, 'len': 0 }
@@ -157,6 +169,12 @@ def process_data():
 
 if __name__ == '__main__':
     if len(sys.argv) > 1 and sys.argv[1] == '--dups':
-        delete_duplicate_events(start_date=sys.argv[2], n_days=sys.argv[3])
+        start_date = datetime.datetime.today().strftime('%Y-%m-%d')
+        n_days = 100
+        if len(sys.argv) > 2:
+            start_date = sys.argv[2]
+        if len(sys.argv) > 3:
+            n_days = sys.argv[3]
+        delete_duplicate_events(start_date, n_days)
     else:
         process_data()
