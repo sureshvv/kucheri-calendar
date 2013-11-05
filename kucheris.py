@@ -22,12 +22,14 @@ class KuchIterator:
         for c1 in parent.children:
             if getattr(c1, 'name', None):
                 if c1.name == 'a':
-                    out += c1.string
+                    if c1.string:
+                        out += c1.string
                 elif c1.name in ['i', 'br']:
                     out += ", "
                     out += self.get_a_children(c1)
             else:
-                out += c1.string
+                if c1.string:
+                    out += c1.string
         return out
 
     def next(self):

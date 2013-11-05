@@ -48,9 +48,22 @@ def same_string(str1, str2):
         return True
     str1 = str1.encode('utf-8') if type(str1) == type(u'a') else str1
     str2 = str2.encode('utf-8') if type(str2) == type(u'a') else str2
-    print '++++', str1, str2
+    #print '++++', str1, str2
     ratio = Levenshtein.ratio(str1, str2)
     return ratio > 0.9
+
+def same_time(time1, time2):
+    pos1 = time1.start_time.find('.')
+    pos2 = time2.start_time.find('.')
+    if pos1 == -1 or pos2 == -1:
+        return False
+    dt1 = time1.start_time[:pos1]
+    dt2 = time2.start_time[:pos2]
+    dt1 = datetime.datetime.strptime(dt1, "%Y-%m-%dT%H:%M:%S")
+    dt2 = datetime.datetime.strptime(dt2, "%Y-%m-%dT%H:%M:%S")
+    diff1 = dt1 - dt2
+    diff1 = abs(diff1.total_seconds())
+    return diff1 < 7201
 
 def chk_event(cal_client, event):
     global last_info
@@ -94,9 +107,17 @@ def add_event(cal_client, event):
         try:
             new_event = cal_client.InsertEvent(ev1, '/calendar/feeds/' + CALENDAR_NAME + '/private/full')
         except gdata.service.RequestError as inst:
-            print '++++', 'Retrying...', ntries, inst[0]['status']
-            time.sleep(5)
-            new_event = None
+            if inst[0]['status'] != 302:
+                raise
+            body = inst[0]['body']
+            pos = body.find("gsessionid=")
+            if pos != -1:
+                body = body[pos+11:]
+                pos = body.find('"')
+                body = body[:pos]
+                print '++++', 'Retrying %d sessionid=%s...' % (ntries, body)
+                time.sleep(5)
+                new_event = None
         else:
             break
     return new_event
@@ -127,17 +148,26 @@ def delete_duplicate_events(start_date, n_days):
                                   0
                                  )
                    )
-        #import pdb; pdb.set_trace()
         last_event = None
         for ev in events:
-            if last_event and last_event.when[0].start_time == ev.when[0].start_time:
-                if last_event.title.text in ev.title.text:
-                    print '... deleting ', last_event.title.text, ' at ', last_event.when[0].start_time
-                    ex1.DeleteEvent(last_event.GetEditLink().href)
-                    last_event = None
-                elif ev.title.text in last_event.title.text or same_string(last_event.title.text, ev.title.text):
-                    print '... deleting ', ev.title.text, ' at ', ev.when[0].start_time
-                    ex1.DeleteEvent(ev.GetEditLink().href)
+            if not last_event:
+                last_event = ev
+                continue
+            if same_time(last_event.when[0], ev.when[0]):
+                if last_event.title.text in ev.title.text or \
+                       ev.title.text in last_event.title.text or \
+                       same_string(last_event.title.text, ev.title.text):
+                    last_event_updated = last_event.content.text.split()[1:]
+                    ev_updated = ev.content.text.split()[1:]
+                    if last_event_updated < ev_updated:
+                        print '... deleting ', last_event.title.text, ' at ', last_event.when[0].start_time
+                        ex1.DeleteEvent(last_event.GetEditLink().href)
+                        last_event = ev
+                    else:
+                        print '... deleting ', ev.title.text, ' at ', ev.when[0].start_time
+                        ex1.DeleteEvent(ev.GetEditLink().href)
+                else:
+                    last_event = ev
             else:
                 last_event = ev
         last_info = {'date': None, 'feed': None, 'len': 0 }
@@ -170,7 +200,7 @@ def process_data():
 if __name__ == '__main__':
     if len(sys.argv) > 1 and sys.argv[1] == '--dups':
         start_date = datetime.datetime.today().strftime('%Y-%m-%d')
-        n_days = 100
+        n_days = 28
         if len(sys.argv) > 2:
             start_date = sys.argv[2]
         if len(sys.argv) > 3:
