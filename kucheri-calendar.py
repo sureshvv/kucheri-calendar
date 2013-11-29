@@ -43,6 +43,10 @@ def google_login(email, password):
 
 last_info = {'date': None, 'feed': None, 'len': 0 }
 
+def ignore_dot(str1):
+    str1 = str1.strip(', ')
+    return str1.replace('.', '')
+
 def same_string(str1, str2):
     if not str1 or not str2:
         return True
@@ -53,17 +57,17 @@ def same_string(str1, str2):
     return ratio > 0.9
 
 def same_time(time1, time2):
-    pos1 = time1.start_time.find('.')
-    pos2 = time2.start_time.find('.')
+    pos1 = time1.find('.')
+    pos2 = time2.find('.')
     if pos1 == -1 or pos2 == -1:
         return False
-    dt1 = time1.start_time[:pos1]
-    dt2 = time2.start_time[:pos2]
+    dt1 = time1[:pos1]
+    dt2 = time2[:pos2]
     dt1 = datetime.datetime.strptime(dt1, "%Y-%m-%dT%H:%M:%S")
     dt2 = datetime.datetime.strptime(dt2, "%Y-%m-%dT%H:%M:%S")
     diff1 = dt1 - dt2
     diff1 = abs(diff1.total_seconds())
-    return diff1 < 7201
+    return diff1 < 3601
 
 def chk_event(cal_client, event):
     global last_info
@@ -81,15 +85,16 @@ def chk_event(cal_client, event):
     else:
         feed = last_info['feed']
         assert len(feed.entry) == last_info['len']
+    if not 'what' in event:
+        return
     matches = []
     for an_event in feed.entry:
-      if an_event.title.text and same_string(an_event.title.text, event['what']):
-          for a_when in an_event.when:
-              start = a_when.start_time.split('T')[1].split(':')
-              start_hour = int(start[0])
-              start_min = int(start[1])
-              if start_hour == event['hour'] and start_min == event['min']:
-                  matches.append(an_event)
+      if an_event.title.text and \
+         same_string(an_event.title.text, event['what']) and \
+         same_time(an_event.when[0].start_time,
+                   '%d-%02d-%02dT%02d:%02d:00.' % (event['year'],
+             event['month'], event['day'], event['hour'], event['min'])):
+           matches.append(an_event)
     return matches
 
 def add_event(cal_client, event):
@@ -122,6 +127,36 @@ def add_event(cal_client, event):
             break
     return new_event
 
+def delete_allday_events(start_date, n_days):
+    global last_info
+    ex1 = google_login(username, userpass)
+    start1 = start_date.split('-')
+    start_year = int(start1[0])
+    start_month = int(start1[1])
+    start_day = int(start1[2])
+    for cnt in range(int(n_days)):
+        st1 = datetime.date(start_year, start_month, start_day) + datetime.timedelta(days=cnt)
+        event = {'day': st1.day, 'month': st1.month, 'year': st1.year }
+        #print 'processing ', event['year'], event['month'], event['day']
+        chk_event(ex1, event)
+        events = list(last_info['feed'].entry)
+        events.sort(lambda x, y: ((x.when[0].start_time < y.when[0].start_time and -1) or
+                                  (x.when[0].start_time > y.when[0].start_time and 1) or
+                                  0
+                                 )
+                   )
+        count = 0
+        day1 = datetime.date(st1.year, st1.month, st1.day)
+        day2 = day1 + datetime.timedelta(1)
+        start_date = '%s-%02d-%02d' % (day1.year, day1.month, day1.day)
+        end_date = '%s-%02d-%02d' % (day2.year, day2.month, day2.day)
+        for ev in events:
+            #print ev.when[0].start_time, start_date, ev.when[0].end_time, end_date
+            if ev.when[0].start_time == start_date and ev.when[0].end_time == end_date:
+                ex1.DeleteEvent(ev.GetEditLink().href)
+                count += 1
+        print count, len(events)
+
 def delete_duplicate_events(start_date, n_days):
     global last_info
     ex1 = google_login(username, userpass)
@@ -137,11 +172,12 @@ def delete_duplicate_events(start_date, n_days):
         start_day = int(start_date[2])
     for cnt in range(int(n_days)):
         st1 = datetime.date(start_year, start_month, start_day) + datetime.timedelta(days=cnt)
-        event = {'day': st1.day, 'month': st1.month, 'year': st1.year, 'what': 'junk' }
-        print 'processing ', event['year'], event['month'], event['day']
+        event = {'day': st1.day, 'month': st1.month, 'year': st1.year }
+        #print 'processing ', event['year'], event['month'], event['day']
         chk_event(ex1, event)
         events = list(last_info['feed'].entry)
-        events.sort(lambda x, y: ((x.title.text < y.title.text and -1) or
+        events.sort(lambda x, y: (
+                                  (x.title.text < y.title.text and -1) or
                                   (x.title.text > y.title.text and 1) or
                                   (x.when[0].start_time < y.when[0].start_time and -1) or
                                   (x.when[0].start_time > y.when[0].start_time and 1) or
@@ -153,13 +189,16 @@ def delete_duplicate_events(start_date, n_days):
             if not last_event:
                 last_event = ev
                 continue
-            if same_time(last_event.when[0], ev.when[0]):
-                if last_event.title.text in ev.title.text or \
-                       ev.title.text in last_event.title.text or \
+            if same_time(last_event.when[0].start_time, ev.when[0].start_time) and \
+                    same_string(last_event.where[0].value_string,
+                                ev.where[0].value_string):
+                if ignore_dot(last_event.title.text) in ignore_dot(ev.title.text) or \
+                       ignore_dot(ev.title.text) in ignore_dot(last_event.title.text) or \
                        same_string(last_event.title.text, ev.title.text):
-                    last_event_updated = last_event.content.text.split()[1:]
-                    ev_updated = ev.content.text.split()[1:]
-                    if last_event_updated < ev_updated:
+                    last_event_updated = last_event.content.text and last_event.content.text.split()[1:]
+                    ev_updated = ev.content.text and ev.content.text.split()[1:]
+                    if not last_event_updated or \
+                       (ev_updated and last_event_updated < ev_updated):
                         print '... deleting ', last_event.title.text, ' at ', last_event.when[0].start_time
                         ex1.DeleteEvent(last_event.GetEditLink().href)
                         last_event = ev
@@ -206,5 +245,6 @@ if __name__ == '__main__':
         if len(sys.argv) > 3:
             n_days = sys.argv[3]
         delete_duplicate_events(start_date, n_days)
+        #delete_allday_events(start_date, n_days)
     else:
         process_data()
