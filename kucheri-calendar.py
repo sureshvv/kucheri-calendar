@@ -44,8 +44,12 @@ def google_login(email, password):
 last_info = {'date': None, 'feed': None, 'len': 0 }
 
 def ignore_dot(str1):
+    pos1 = str1.find(' at ')
+    if pos1 != -1:
+        str1 = str1[:pos1]
     str1 = str1.strip(', ')
-    return str1.replace('.', '')
+    str1 = str1.replace('.', '')
+    return str1
 
 def same_string(str1, str2):
     if not str1 or not str2:
@@ -53,7 +57,7 @@ def same_string(str1, str2):
     str1 = str1.encode('utf-8') if type(str1) == type(u'a') else str1
     str2 = str2.encode('utf-8') if type(str2) == type(u'a') else str2
     #print '++++', str1, str2
-    ratio = Levenshtein.ratio(str1, str2)
+    ratio = Levenshtein.ratio(ignore_dot(str1), ignore_dot(str2))
     return ratio > 0.9
 
 def same_time(time1, time2):
@@ -67,14 +71,15 @@ def same_time(time1, time2):
     dt2 = datetime.datetime.strptime(dt2, "%Y-%m-%dT%H:%M:%S")
     diff1 = dt1 - dt2
     diff1 = abs(diff1.total_seconds())
-    return diff1 < 3601
+    return diff1 < 1701
 
 def chk_event(cal_client, event):
     global last_info
     new_date = '%d-%02d-%02d' % (event['year'], event['month'], event['day'])
     if last_info['date'] != new_date:
         query = gdata.calendar.service.CalendarEventQuery(CALENDAR_NAME, 'private', 'full')
-        query.start_min = new_date
+        st1 = datetime.date(event['year'], event['month'], event['day']) - datetime.timedelta(hours=6)
+        query.start_min = '%d-%02d-%02d' % (st1.year, st1.month, st1.day)
         st1 = datetime.date(event['year'], event['month'], event['day']) + datetime.timedelta(days=1)
         query.start_max = '%d-%02d-%02d' % (st1.year, st1.month, st1.day)
         query.max_results = 1000
@@ -177,14 +182,15 @@ def delete_duplicate_events(start_date, n_days):
         chk_event(ex1, event)
         events = list(last_info['feed'].entry)
         events.sort(lambda x, y: (
-                                  (x.title.text < y.title.text and -1) or
-                                  (x.title.text > y.title.text and 1) or
+                                  (ignore_dot(x.title.text) < ignore_dot(y.title.text) and -1) or
+                                  (ignore_dot(x.title.text) > ignore_dot(y.title.text) and 1) or
                                   (x.when[0].start_time < y.when[0].start_time and -1) or
                                   (x.when[0].start_time > y.when[0].start_time and 1) or
                                   0
                                  )
                    )
         last_event = None
+        #import pdb; pdb.set_trace()
         for ev in events:
             if not last_event:
                 last_event = ev
@@ -211,6 +217,70 @@ def delete_duplicate_events(start_date, n_days):
                 last_event = ev
         last_info = {'date': None, 'feed': None, 'len': 0 }
 
+def adjust_end_time(start_date, n_days, del_overlap):
+    global last_info
+    ex1 = google_login(username, userpass)
+    start_date = start_date.split('-')
+    if len(start_date) != 3:
+        start_date = datetime.date.today()
+        start_year = start_date.year
+        start_month = start_date.month
+        start_day = start_date.day
+    else:
+        start_year = int(start_date[0])
+        start_month = int(start_date[1])
+        start_day = int(start_date[2])
+    for cnt in range(int(n_days)):
+        st1 = datetime.date(start_year, start_month, start_day) + datetime.timedelta(days=cnt)
+        event = {'day': st1.day, 'month': st1.month, 'year': st1.year }
+        #print 'processing ', event['year'], event['month'], event['day']
+        chk_event(ex1, event)
+        events = list(last_info['feed'].entry)
+        events = [ e for e in events if e.where[0].value_string ]
+        events.sort(lambda x, y: (
+                                  (x.where[0].value_string.strip() < y.where[0].value_string.strip() and -1) or
+                                  (x.where[0].value_string.strip() > y.where[0].value_string.strip() and 1) or
+                                  (x.when[0].start_time < y.when[0].start_time and -1) or
+                                  (x.when[0].start_time > y.when[0].start_time and 1) or
+                                  0
+                                 )
+                   )
+        last_event = None
+        #import pdb; pdb.set_trace()
+        for ev in events:
+            if not last_event:
+                last_event = ev
+                continue
+            if last_event.where[0].value_string == ev.where[0].value_string:
+                if same_time(last_event.when[0].start_time, ev.when[0].start_time):
+                    if del_overlap:
+                        last_event_updated = last_event.content.text and last_event.content.text.split()[1:]
+                        ev_updated = ev.content.text and ev.content.text.split()[1:]
+                        if not last_event_updated or \
+                           (ev_updated and last_event_updated < ev_updated):
+                            print '... deleting ', last_event.title.text, ' at ', last_event.when[0].start_time
+                            ex1.DeleteEvent(last_event.GetEditLink().href)
+                            last_event = ev
+                        else:
+                            print '... deleting ', ev.title.text, ' at ', ev.when[0].start_time
+                            ex1.DeleteEvent(ev.GetEditLink().href)
+                    else:
+                        print "Possible Overlap at ", last_event.where[0].value_string, last_event.when[0].start_time
+                        print "    ", last_event.title.text, "\n    ", ev.title.text
+                elif last_event.when[0].end_time > ev.when[0].start_time:
+                    if ev.when[0].start_time > last_event.when[0].start_time:
+                       last_event.when[0].end_time = ev.when[0].start_time
+                       ex1.UpdateEvent(last_event.GetEditLink().href, last_event)
+                       print "Updated:", last_event.where[0].value_string, last_event.when[0].start_time, last_event.when[0].end_time
+                    else:
+                        import pdb; pdb.set_trace()
+                        print "++++ Possible SCREWUP at ", last_event.where[0].value_string, last_event.when[0].start_time
+                        print "    ", last_event.title.text, "\n    ", ev.title.text
+                        return
+            last_event = ev
+        last_info = {'date': None, 'feed': None, 'len': 0 }
+
+
 
 def process_data():
     today = datetime.date.today()
@@ -228,7 +298,7 @@ def process_data():
             print 'passing over %s-%02d-%02d' % (x['year'], x['month'], x['day'])
             continue
         if not x['what'].strip():
-            print 'passing over -%s-' % (x['what'], )
+            #print 'passing over ----', x['what'], '---- on ', '%s-%02d-%02d %02d:%02d at %s' % (x['year'], x['month'], x['day'], x['hour'], x['min'], x['where'])
             continue
         if chk_event(ex1, x):
             #print 'passing over ', x['what'], ' on ', '%s-%02d-%02d' % (x['year'], x['month'], x['day'])
@@ -237,9 +307,20 @@ def process_data():
         print 'adding ', x['what'], ' on ', '%s-%02d-%02d' % (x['year'], x['month'], x['day'])
 
 if __name__ == '__main__':
-    if len(sys.argv) > 1 and sys.argv[1] == '--dups':
+    if len(sys.argv) > 1 and sys.argv[1] == '--adjust':
         start_date = datetime.datetime.today().strftime('%Y-%m-%d')
-        n_days = 28
+        n_days = 30
+        if len(sys.argv) > 2:
+            start_date = sys.argv[2]
+        if len(sys.argv) > 3:
+            n_days = sys.argv[3]
+        del_overlap = False
+        if len(sys.argv) > 4:
+            del_overlap = sys.argv[4] == 'delete'
+        adjust_end_time(start_date, n_days, del_overlap)
+    elif len(sys.argv) > 1 and sys.argv[1] == '--dups':
+        start_date = datetime.datetime.today().strftime('%Y-%m-%d')
+        n_days = 30
         if len(sys.argv) > 2:
             start_date = sys.argv[2]
         if len(sys.argv) > 3:
