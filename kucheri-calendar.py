@@ -20,7 +20,6 @@ import calendar, time
 import urllib2
 import atom
 from subprocess import Popen, PIPE
-from calendarExample import CalendarExample 
 from google_pw import username, userpass
 import gdata.calendar
 import gdata.service
@@ -28,17 +27,24 @@ import gdata.calendar.service
 import Levenshtein
 
 from kucheris import KuchIterator
-from ramsabode import RamIterator
 
 CALENDAR_NAME = 'default'
 #CALENDAR_NAME = 'admin@rasikas.org'
 
-def google_login(email, password):
+def google_login(u_email, u_password):
     cal_client = gdata.calendar.service.CalendarService()
-    cal_client.email = email
-    cal_client.password = password
-    cal_client.source = 'Google-Calendar_Python_Sample-1.0'
-    cal_client.ProgrammaticLogin()
+    try:
+       cal_client.ClientLogin(u_email, u_password, source="myapp")
+    except gdata.service.CaptchaRequired:
+       print 'Please visit ' + client.captcha_url
+       answer = raw_input('Answer to the challenge? ')
+       cal_client.ClientLogin(u_email, u_password, source="myapp",
+                     captcha_token=cal_client.captcha_token,
+                     captcha_response=answer)
+    except gdata.service.BadAuthentication:
+       exit('Users credentials were unrecognized')
+    except gdata.service.Error:
+       exit('Login Error')
     return cal_client
 
 last_info = {'date': None, 'feed': None, 'len': 0 }
@@ -177,7 +183,6 @@ def process_data():
     today = datetime.date.today()
     ex1 = google_login(username, userpass)
     r1 = KuchIterator()
-    #r1 = RamIterator()
     for x in r1:
         if x['year'] < today.year:
             print 'passing over ', x['year']

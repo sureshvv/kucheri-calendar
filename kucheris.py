@@ -10,6 +10,8 @@ class KuchIterator:
     def __init__(self):
         fp = urllib2.urlopen(PAGE_URL)
         body = fp.read()
+        body = body.replace("</br>", "")
+        body = body.replace("<br>", "<br />")
         soup = BeautifulSoup(body)
         self.schedule = soup.find_all('table')[0]
         self.cur_row = self.schedule.tbody.tr
@@ -37,21 +39,33 @@ class KuchIterator:
             c = self.cur_row.children
         except AttributeError:
             raise StopIteration
-        c.next()
-        c.next()
-        dt1 = c.next().string.split()
-        self.day = int(dt1[1].rstrip('st').rstrip('nd').rstrip('rd').rstrip('th'))
-        self.month = months.index(dt1[2]) + 1
-        if len(dt1) > 3:
-            self.year = int(dt1[3])
-        start_time = c.next().string.split()
-        c.next()
-        #import pdb; pdb.set_trace()
-        who = self.get_a_children(c.next())
-        #who = c.next().get_text().replace(')', '), ').rstrip(', ')
-        loc = self.get_a_children(c.next())
-        #loc = c.next().get_text()
-        self.cur_row = self.cur_row.next_sibling
+        junk = c.next()
+        junk = c.next()
+        junk = c.next()
+        """ <td style="padding: 15px;">
+              <span style="font-size:120%;margin-bottom: 7px;display: block;">
+                <a href="artist.php?id=544">Dr. Subashini Parthasarathy</a> (Vocal),
+                <a href="artist.php?id=328">Pakkala Ramadas</a> (Violin),
+                <a href="artist.php?id=31">Poongulam Subramaniam</a> (Mrdangam),
+                <a href="artist.php?id=15">V. Anirudh Athreya</a> (Kanjira)
+                </br>
+              </span>
+              <span style="font-size:100%;">
+                <img src="images/icons/datetime.png" height="12px"/>&nbspSunday, October 19th, 2014 at 6:15 PM</br>
+                <img src="images/icons/sabha.png" height="12px"/>&nbsp<a href="organization.php?id=37">Nadopasana</a><br>
+                <img src="images/icons/venue.png" height="12px"/>&nbsp<a href="venues.php?vid=6">Ragasudha Hall (Chennai)</a>
+              </span>
+            </td>
+        """
+        a3 = c.next()
+        who = ', '.join(str(x.contents[0]) for x in a3.span('a'))
+        dt1 = a3('span')[1].contents[1].split()[1:]
+        self.day = int(dt1[1].rstrip('st,').rstrip('nd,').rstrip('rd,').rstrip('th,'))
+        self.month = months.index(dt1[0][:3]) + 1
+        self.year = int(dt1[2])
+        start_time = [dt1[4], dt1[5]]
+        loc = a3('span')[1].contents[-1].contents[0]
+        self.cur_row = c.next()
         dict1 = {}
         dict1['hour'] = int(start_time[0].split(':')[0])
         assert dict1['hour'] <= 12

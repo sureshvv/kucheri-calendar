@@ -1,2 +1,7 @@
-*.pyc
+bin
+build
+lib
+include
 google_pw.py
+tst.py
+*.pyc
