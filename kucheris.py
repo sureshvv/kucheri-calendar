@@ -56,9 +56,20 @@ class KuchIterator:
                 <img src="images/icons/venue.png" height="12px"/>&nbsp<a href="venues.php?vid=6">Ragasudha Hall (Chennai)</a>
               </span>
             </td>
+        ----
+        <td style="padding: 15px;">
+        <a style="font-size:120%;">
+        <i>Students of Smt. Padmini Radhakrishnan</i></a>
+        <br><span style="font-size:120%;margin-bottom: 7px;display: block;"></br></span><span style="font-size:100%;"><img src="images/icons/datetime.png" height="12px"/>&nbspSunday, November 30th, 2014 at 6:00 PM</br><img src="images/icons/sabha.png" height="12px"/>&nbsp<a href="organization.php?id=179">Pushpaanjali Cultural Trus
         """
         a3 = c.next()
         who = ', '.join(str(x.contents[0]) for x in a3.span('a'))
+        if not who:
+            #import pdb; pdb.set_trace()
+            try:
+                who = a3.a.i.contents[0]
+            except AttributeError:
+                who = a3.contents[0]
         dt1 = a3('span')[1].contents[1].split()[1:]
         self.day = int(dt1[1].rstrip('st,').rstrip('nd,').rstrip('rd,').rstrip('th,'))
         self.month = months.index(dt1[0][:3]) + 1
