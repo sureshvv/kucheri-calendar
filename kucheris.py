@@ -96,7 +96,10 @@ class KuchIterator:
         #else:
         #    dict1['hour'] -= 6
         #    dict1['min'] += 30
-        dict1['what'] = who.encode('utf-8')
+        try:
+            dict1['what'] = who.encode('utf-8')
+        except RuntimeError:
+            dict1['what'] = u'*** UNKNOWN ***'
         dict1['where'] = loc.encode('utf-8')
         dict1['year'] = self.year
         dict1['month'] = self.month

@@ -30,7 +30,7 @@ SCOPE = 'https://www.googleapis.com/auth/calendar'
 
 from kucheris import KuchIterator
 
-CALENDAR_NAME = 'default'
+CALENDAR_NAME = '2c9kfkihbmrmoogjd91mdg92sk@group.calendar.google.com'
 #CALENDAR_NAME = 'admin@rasikas.org'
 
 def google_login():
@@ -46,7 +46,8 @@ def google_login():
     service = build('calendar', 'v3', http=http)
     return service
 
-last_info = {'date': None, 'feed': None, 'len': 0 }
+init_last_info = {'date': None, 'feed': None, 'len': 0 }
+last_info = init_last_info.copy()
 
 def ignore_dot(str1):
     pos1 = str1.find(' at ')
@@ -78,7 +79,7 @@ def same_time(time1, time2):
     diff1 = abs(diff1.total_seconds())
     return diff1 < 1701
 
-def chk_event(service, event):
+def chk_event(service, event, calendar_id=CALENDAR_NAME):
     global last_info
     new_date = '%d-%02d-%02d' % (event['year'], event['month'], event['day'])
     if last_info['date'] != new_date:
@@ -88,7 +89,7 @@ def chk_event(service, event):
         start_min = '%d-%02d-%02dT00:00:00+05:30' % (st1.year, st1.month, st1.day)
         st1 = datetime.date(event['year'], event['month'], event['day']) + datetime.timedelta(days=1)
         start_max = '%d-%02d-%02dT00:00:00+05:30' % (st1.year, st1.month, st1.day)
-        request = service.events().list(calendarId='primary',
+        request = service.events().list(calendarId=calendar_id,
             timeMax=start_max, timeMin=start_min)
         while request != None:
             # Get the next page.
@@ -125,38 +126,29 @@ def add_event(service, event):
               'description': event['content'],
           }
 
-    new_event = service.events().insert(calendarId='primary', body=event).execute()
+    new_event = service.events().insert(calendarId=CALENDAR_NAME, body=event).execute()
     return new_event
 
-def delete_allday_events(start_date, n_days):
+def delete_primary_events(start_date, n_days):
     global last_info
     ex1 = google_login()
     start1 = start_date.split('-')
     start_year = int(start1[0])
     start_month = int(start1[1])
     start_day = int(start1[2])
+    count = 0
     for cnt in range(int(n_days)):
         st1 = datetime.date(start_year, start_month, start_day) + datetime.timedelta(days=cnt)
         event = {'day': st1.day, 'month': st1.month, 'year': st1.year }
-        #print 'processing ', event['year'], event['month'], event['day']
-        chk_event(ex1, event)
-        events = list(last_info['feed'].entry)
-        events.sort(lambda x, y: ((x.when[0].start_time < y.when[0].start_time and -1) or
-                                  (x.when[0].start_time > y.when[0].start_time and 1) or
-                                  0
-                                 )
-                   )
-        count = 0
-        day1 = datetime.date(st1.year, st1.month, st1.day)
-        day2 = day1 + datetime.timedelta(1)
-        start_date = '%s-%02d-%02d' % (day1.year, day1.month, day1.day)
-        end_date = '%s-%02d-%02d' % (day2.year, day2.month, day2.day)
+        print 'processing ', event['year'], event['month'], event['day']
+        chk_event(ex1, event, 'primary')
+        events = list(last_info['events'])
         for ev in events:
-            #print ev.when[0].start_time, start_date, ev.when[0].end_time, end_date
-            if ev.when[0].start_time == start_date and ev.when[0].end_time == end_date:
-                ex1.DeleteEvent(ev.GetEditLink().href)
+            if ev['description'].startswith('kutcheris '):
+                ex1.events().delete(calendarId='primary', eventId=ev['id']).execute()
                 count += 1
-        print count, len(events)
+    last_info.update(init_last_info)
+    print 'deleted ', count
 
 def delete_duplicate_events(start_date, n_days):
     global last_info
@@ -201,11 +193,11 @@ def delete_duplicate_events(start_date, n_days):
                     if not last_event_updated or \
                        (ev_updated and last_event_updated < ev_updated):
                         print '... deleting ', last_event['summary'], ' at ', last_event['start']['dateTime']
-                        ex1.events().delete(calendarId='primary', eventId=last_event['id']).execute()
+                        ex1.events().delete(calendarId=CALENDAR_NAME, eventId=last_event['id']).execute()
                         last_event = ev
                     else:
                         print '... deleting ', ev['summary'], ' at ', ev['start']['dateTime']
-                        ex1.events().delete(calendarId='primary', eventId=ev['id']).execute()
+                        ex1.events().delete(calendarId=CALENDAR_NAME, eventId=ev['id']).execute()
                 else:
                     last_event = ev
             else:
@@ -325,7 +317,10 @@ if __name__ == '__main__':
         if len(sys.argv) > 3:
             n_days = sys.argv[3]
         delete_duplicate_events(start_date, n_days)
-        #delete_allday_events(start_date, n_days)
+    elif len(sys.argv) > 1 and sys.argv[1] == '--primary':
+        start_date = datetime.datetime.today().strftime('%Y-%m-%d')
+        n_days = 0
+        #delete_primary_events(start_date, n_days)
     else:
         max_events = int(sys.argv[1]) if len(sys.argv) > 1 else 0
         process_data(max_events)
