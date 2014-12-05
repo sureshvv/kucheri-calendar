@@ -24,13 +24,12 @@ from apiclient.discovery import build
 from oauth2client.file import Storage
 from oauth2client import tools
 from oauth2client.client import OAuth2WebServerFlow
-from google_pw import MY_CLIENT_ID, MY_CLIENT_SECRET
+from google_pw import MY_CLIENT_ID, MY_CLIENT_SECRET, MY_CALENDAR_NAME 
 
 SCOPE = 'https://www.googleapis.com/auth/calendar'
 
 from kucheris import KuchIterator
 
-CALENDAR_NAME = '2c9kfkihbmrmoogjd91mdg92sk@group.calendar.google.com'
 #CALENDAR_NAME = 'admin@rasikas.org'
 
 def google_login():
@@ -79,7 +78,7 @@ def same_time(time1, time2):
     diff1 = abs(diff1.total_seconds())
     return diff1 < 1701
 
-def chk_event(service, event, calendar_id=CALENDAR_NAME):
+def chk_event(service, event, calendar_id=MY_CALENDAR_NAME):
     global last_info
     new_date = '%d-%02d-%02d' % (event['year'], event['month'], event['day'])
     if last_info['date'] != new_date:
@@ -126,7 +125,7 @@ def add_event(service, event):
               'description': event['content'],
           }
 
-    new_event = service.events().insert(calendarId=CALENDAR_NAME, body=event).execute()
+    new_event = service.events().insert(calendarId=MY_CALENDAR_NAME, body=event).execute()
     return new_event
 
 def delete_primary_events(start_date, n_days):
@@ -193,11 +192,11 @@ def delete_duplicate_events(start_date, n_days):
                     if not last_event_updated or \
                        (ev_updated and last_event_updated < ev_updated):
                         print '... deleting ', last_event['summary'], ' at ', last_event['start']['dateTime']
-                        ex1.events().delete(calendarId=CALENDAR_NAME, eventId=last_event['id']).execute()
+                        ex1.events().delete(calendarId=MY_CALENDAR_NAME, eventId=last_event['id']).execute()
                         last_event = ev
                     else:
                         print '... deleting ', ev['summary'], ' at ', ev['start']['dateTime']
-                        ex1.events().delete(calendarId=CALENDAR_NAME, eventId=ev['id']).execute()
+                        ex1.events().delete(calendarId=MY_CALENDAR_NAME, eventId=ev['id']).execute()
                 else:
                     last_event = ev
             else:
