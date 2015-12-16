@@ -59,10 +59,10 @@ def ignore_dot(str1):
 def same_string(str1, str2):
     if not str1 or not str2:
         return True
-    str1 = str1.encode('utf-8') if type(str1) == type(u'a') else str1
-    str2 = str2.encode('utf-8') if type(str2) == type(u'a') else str2
+    # str1 = str1.encode('utf-8') if type(str1) == type(u'a') else str1
+    # str2 = str2.encode('utf-8') if type(str2) == type(u'a') else str2
     #print '++++', str1, str2
-    ratio = Levenshtein.ratio(ignore_dot(str1), ignore_dot(str2))
+    ratio = Levenshtein.ratio(str1, str2)
     return ratio > 0.9
 
 def same_time(time1, time2):

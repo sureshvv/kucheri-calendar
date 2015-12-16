@@ -6,4 +6,7 @@ local
 credentials.dat
 google_pw.py
 tst.py
+ghostdriver.log
+pip-selfcheck.json
 *.pyc
+*~

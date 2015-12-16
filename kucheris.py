@@ -1,23 +1,27 @@
-import urllib2
 import calendar
+import time
 import datetime
-from bs4 import BeautifulSoup
+import bs4
 
-PAGE_URL = 'http://kutcheris.com/schedule.php'
+PAGE_URL = 'http://www.musicrux.com/kutcheris'
+
+from splinter import Browser
+
 months = [x[:3] for x in calendar.month_name[1:]]
 
 class KuchIterator:
     def __init__(self):
-        fp = urllib2.urlopen(PAGE_URL)
-        body = fp.read()
-        body = body.replace("</br>", "")
-        body = body.replace("<br>", "<br />")
-        soup = BeautifulSoup(body)
-        self.schedule = soup.find_all('table')[0]
-        self.cur_row = self.schedule.tbody.tr
+        self.browser = Browser('phantomjs')
+        self.browser.visit(PAGE_URL)
+        self.get_next_row()
 
     def __iter__(self):
         return self
+
+    def get_next_row(self):
+        soup = bs4.BeautifulSoup(self.browser.html)
+        self.schedule = soup.find_all('table')[0]
+        self.cur_row = self.schedule.tbody.tr
 
     def get_a_children(self, parent):
         out = ""
@@ -36,75 +40,38 @@ class KuchIterator:
 
     def next(self):
         try:
-            c = self.cur_row.children
+            c1 = self.cur_row.td
         except AttributeError:
-            raise StopIteration
-        junk = c.next()
-        junk = c.next()
-        junk = c.next()
-        """ <td style="padding: 15px;">
-              <span style="font-size:120%;margin-bottom: 7px;display: block;">
-                <a href="artist.php?id=544">Dr. Subashini Parthasarathy</a> (Vocal),
-                <a href="artist.php?id=328">Pakkala Ramadas</a> (Violin),
-                <a href="artist.php?id=31">Poongulam Subramaniam</a> (Mrdangam),
-                <a href="artist.php?id=15">V. Anirudh Athreya</a> (Kanjira)
-                </br>
-              </span>
-              <span style="font-size:100%;">
-                <img src="images/icons/datetime.png" height="12px"/>&nbspSunday, October 19th, 2014 at 6:15 PM</br>
-                <img src="images/icons/sabha.png" height="12px"/>&nbsp<a href="organization.php?id=37">Nadopasana</a><br>
-                <img src="images/icons/venue.png" height="12px"/>&nbsp<a href="venues.php?vid=6">Ragasudha Hall (Chennai)</a>
-              </span>
-            </td>
-        ----
-        <td style="padding: 15px;">
-        <a style="font-size:120%;">
-        <i>Students of Smt. Padmini Radhakrishnan</i></a>
-        <br><span style="font-size:120%;margin-bottom: 7px;display: block;"></br></span><span style="font-size:100%;"><img src="images/icons/datetime.png" height="12px"/>&nbspSunday, November 30th, 2014 at 6:00 PM</br><img src="images/icons/sabha.png" height="12px"/>&nbsp<a href="organization.php?id=179">Pushpaanjali Cultural Trus
-        """
-        a3 = c.next()
-        who = ', '.join(str(x.contents[0]) for x in a3.span('a'))
-        if not who:
-            #import pdb; pdb.set_trace()
-            try:
-                who = a3.a.i.contents[0]
-            except AttributeError:
-                who = a3.contents[0]
-        dt1 = a3('span')[1].contents[1].split()[1:]
-        self.day = int(dt1[1].rstrip('st,').rstrip('nd,').rstrip('rd,').rstrip('th,'))
-        self.month = months.index(dt1[0][:3]) + 1
-        self.year = int(dt1[2])
-        start_time = [dt1[4], dt1[5]]
-        loc = a3('span')[1].contents[-1].contents[0]
-        self.cur_row = c.next()
+            self.browser.find_link_by_partial_text('next').click()
+            time.sleep(5)
+            self.get_next_row()
+            c1 = self.cur_row.td
+
+        when1 = c1.span['content']
+        c1 = c1.next_sibling
+        who1 = c1.next_sibling.div.ul.li.contents[0]
+        if not isinstance(who1, bs4.element.NavigableString):
+            who1 = who1.contents[0]
+        c1 = c1.next_sibling
+        c1 = c1.next_sibling
+        c1 = c1.next_sibling
+        c1 = c1.next_sibling
+        where1 = c1.next_sibling.a.contents[0]
+        self.cur_row = self.cur_row.next_sibling
+        self.cur_row = self.cur_row.next_sibling
+        pos1 = when1.find('+')
+        if pos1 != -1:
+            when1 = when1[:pos1]
+        date1 = datetime.datetime.strptime(when1, '%Y-%m-%dT%H:%M:%S')
         dict1 = {}
-        dict1['hour'] = int(start_time[0].split(':')[0])
-        assert dict1['hour'] <= 12
-        try:
-            dict1['min'] = int(start_time[0].split(':')[1])
-        except (IndexError, ValueError):
-            dict1['min'] = 0
-        assert dict1['min'] < 60
-        start_time[1] = start_time[1].upper()
-        assert start_time[1] in ['AM', 'PM']
-        if start_time[1] == 'PM':
-                if dict1['hour'] < 12:
-                    dict1['hour'] += 12
-        #if dict1['min'] >= 30:
-        #    dict1['hour'] -= 5
-        #    dict1['min'] -= 30
-        #else:
-        #    dict1['hour'] -= 6
-        #    dict1['min'] += 30
-        try:
-            dict1['what'] = who.encode('utf-8')
-        except RuntimeError:
-            dict1['what'] = u'*** UNKNOWN ***'
-        dict1['where'] = loc.encode('utf-8')
-        dict1['year'] = self.year
-        dict1['month'] = self.month
-        dict1['day'] = self.day
-        dict1['content'] = 'kutcheris %s' % datetime.datetime.now()
+        dict1['year'] = date1.year
+        dict1['month'] = date1.month
+        dict1['day'] = date1.day
+        dict1['hour'] = date1.hour
+        dict1['min'] = date1.minute
+        dict1['what'] = who1
+        dict1['where'] = where1
+        dict1['content'] = 'musicrux'
         return dict1
 
 
