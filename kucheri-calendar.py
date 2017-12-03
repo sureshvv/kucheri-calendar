@@ -29,6 +29,8 @@ from google_pw import MY_CLIENT_ID, MY_CLIENT_SECRET, MY_CALENDAR_NAME
 SCOPE = 'https://www.googleapis.com/auth/calendar'
 
 from kucheris import KuchIterator
+from ramsabode import RamIterator
+from bvb import BVBIterator
 
 #CALENDAR_NAME = 'admin@rasikas.org'
 
@@ -53,17 +55,43 @@ def ignore_dot(str1):
     if pos1 != -1:
         str1 = str1[:pos1]
     str1 = str1.strip(', ')
+    str1 = str1.replace('Dr', '')
+    str1 = str1.replace('Sri', '')
+    str1 = str1.replace('Smt', '')
+    str1 = str1.replace('Ms', '')
+    str1 = str1.replace('Vidwan', '')
+    str1 = str1.replace('Carnatic', '')
     str1 = str1.replace('.', '')
-    return str1
+    str1  = str1.replace('&amp;', '&')
+    str1  = str1.replace('&#8217;', "'")
+    str1 = str1.replace('(', '')
+    str1 = str1.replace(')', '')
+    return str1.strip()
+
+def same_location(str1, str2):
+    if str2 == 'BVB' and 'Bharatiya Vidya Bhavan' in str1:
+        return True
+    if str1 == 'BVB' and 'Bharatiya Vidya Bhavan' in str2:
+        return True
+    return same_string(str1, str2)
 
 def same_string(str1, str2):
     if not str1 or not str2:
         return True
-    # str1 = str1.encode('utf-8') if type(str1) == type(u'a') else str1
-    # str2 = str2.encode('utf-8') if type(str2) == type(u'a') else str2
+    str1 = str1.encode('utf-8') if type(str1) == type(u'a') else str1
+    str2 = str2.encode('utf-8') if type(str2) == type(u'a') else str2
     #print '++++', str1, str2
+    str1 = str1.lower()
+    str2 = str2.lower()
+    str1  = ignore_dot(str1)
+    str2  = ignore_dot(str2)
+    if len(str1) > len(str2):
+        str1, str2 = str2, str1
+    str2 = str2[:len(str1)]
+    if str1 in str2 or str2 in str1:
+        return True
     ratio = Levenshtein.ratio(str1, str2)
-    return ratio > 0.9
+    return ratio >= 0.85
 
 def same_time(time1, time2):
     pos1 = time1.find('+')
@@ -165,14 +193,14 @@ def delete_duplicate_events(start_date, n_days):
     for cnt in range(int(n_days)):
         st1 = datetime.date(start_year, start_month, start_day) + datetime.timedelta(days=cnt)
         event = {'day': st1.day, 'month': st1.month, 'year': st1.year }
-        #print 'processing ', event['year'], event['month'], event['day']
+        print 'processing ', event['year'], event['month'], event['day']
         chk_event(ex1, event)
         events = last_info['events']
         events.sort(lambda x, y: (
-                                  (ignore_dot(x['summary']) < ignore_dot(y['summary']) and -1) or
-                                  (ignore_dot(x['summary']) > ignore_dot(y['summary']) and 1) or
                                   (x['start']['dateTime'] < y['start']['dateTime'] and -1) or
                                   (x['start']['dateTime'] > y['start']['dateTime'] and 1) or
+                                  (ignore_dot(x['summary']) < ignore_dot(y['summary']) and -1) or
+                                  (ignore_dot(x['summary']) > ignore_dot(y['summary']) and 1) or
                                   0
                                  )
                    )
@@ -183,7 +211,7 @@ def delete_duplicate_events(start_date, n_days):
                 last_event = ev
                 continue
             if same_time(last_event['start']['dateTime'], ev['start']['dateTime']) and \
-               same_string(last_event['location'], ev['location']):
+               same_location(last_event['location'], ev['location']):
                 if ignore_dot(last_event['summary']) in ignore_dot(ev['summary']) or \
                        ignore_dot(ev['summary']) in ignore_dot(last_event['summary']) or \
                        same_string(last_event['summary'], ev['summary']):
@@ -271,7 +299,9 @@ def adjust_end_time(start_date, n_days, del_overlap):
 def process_data(max_events):
     today = datetime.date.today()
     ex1 = google_login()
-    r1 = KuchIterator()
+    r1 = RamIterator()
+    # r1 = KuchIterator()
+    # r1 = BVBIterator()
     added = 0
     for x in r1:
         if x['year'] < today.year:

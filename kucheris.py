@@ -19,7 +19,7 @@ class KuchIterator:
         return self
 
     def get_next_row(self):
-        soup = bs4.BeautifulSoup(self.browser.html)
+        soup = bs4.BeautifulSoup(self.browser.html, 'html.parser')
         self.schedule = soup.find_all('table')[0]
         self.cur_row = self.schedule.tbody.tr
 
